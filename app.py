@@ -1,4 +1,6 @@
 # Import Flask, SQL toolkit, Objetct Relational Mappy
+import datetime as dt
+import numpy as np
 import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
@@ -45,48 +47,89 @@ def home():
     print("Server received rquest for 'Home' page...")
     return "Welcome to the Hawaii Climate App page!"
 
-# convert query results to a dictionary using date as the key and prcp as the value.
-# Return the JSON representation of your dictionary.
+
 # precipiation route
 @app.route("/api/v1.0/precipitation")
 def precipiation_route():
     # Create our session (link) from Python to the DB
     session = Session(engine)
-    # query
-    results = session.query(Measurement.prcp).all()
+
+    # convert query results to a dictionary using date as the key and prcp as the value.
+    # calculate the date one year from the last date in data set
+    recent_date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
+    one_year_prior = (dt.datetime.strptime(recent_date[0],'%Y-%m-%d') - dt.timedelta(days=364)).strftime('%Y-%m-%d')
+    # query to retrieve the last 12 months of precipitation data
+    results = session.query(Measurement.date, Measurement.prcp).filter(Measurement.date >= one_year_prior).all()
+    # Convert list of tuples into normal list
+    all_prcp = {result[0]:result[1] for result in results} # code from Linlin 
+    # Return the JSON representation of your dictionary.
+    return jsonify(all_prcp)
 
     session.close()
-
-    # Convert list of tuples into normal list
-    all_prcp = list(np.ravel(results))
-    # Return a JSON list of stations from the dataset.
-    return jsonify(all_prcp)
 
 
 # station route
 @app.route("/api/v1.0/stations")
 def station_route():
-    return (session.query(Station.station).count()
-    )
+    results = session.query(Measurement.station).all()
+    # Convert list of tuples into normal list
+    StationListCount = list(np.ravel(results))
+    # Return a JSON list of stations from the dataset
+    return jsonify(StationListCount)
 
-# Query dates & temp observations of the most active station for the last year of data.
-# Return a JSON list of temperature observations (TOBS) for the previous year.
+
 # temperature route
 @app.route("/api/v1.0/tobs")
 def temp_route():
+ # Create our session (link) from Python to the DB
+    session = Session(engine)
+    # Query dates & temp observations of the most active station for the last year of data.
+    # most_active = session.query(Measurement.station, func.count(Measurement.date)).\
+    # group_by(Measurement.station).order_by(func.count(Measurement.date).desc()).first()
+
+    results = session.query(Measurement.station, Measurement.date, Measurement.tobs).\
+        filter(Measurement.station == "USC00519281").\
+        filter(Measurement.date >= "2016-08-24", Measurement.date <= "2017-08-23").all()
+
+    session.close()
+
+    # Create a dictionary from the row data and append to a list of all_temps
+    all_temps = []
+    for station, date, temp in results:
+        temp_dict = {}
+        temp_dict["station"] = station
+        temp_dict["date"] = date
+        temp_dict["temp"] = temp
+        all_temps.append(temp_dict)
+
+# Return a JSON list of temperature observations (TOBS) for the previous year.
+    return jsonify(all_temps)
 
 
-# Return a JSON list of the minimum temperature, the average temperature, and the max temperature for a given start or start-end range.
-# When given the start only, calculate TMIN, TAVG, and TMAX for all dates greater than and equal to the start date.
-# When given the start and the end date, calculate the TMIN, TAVG, and TMAX for dates between the start and end date inclusive.
+
 # API DYNAMIC ROUTE
 @app.route("/api/v1.0/<start>")
-def start_date_route():
+def start_only(start):
+   # return a JSON of min, max, avg temp for a given start-only date. 
+    start_only = session.query(Measurement.date, func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+        filter(Measurement.date >= start).\
+        group_by(Measurement.date).all()
+    # Convert List of Tuples Into Normal List
+    start_only_list = list(start_only)
+    # Return JSON List of Min Temp, Avg Temp and Max Temp for a Given Start Range
+    return jsonify(start_only_list)
 
-# @app.route("/api/v1.0/<start>/<end")
-# def end_date_route():
-
-
+@app.route("/api/v1.0/<start>/<end>")
+def start_and_end(start, end):
+    # return a JSON of min, max, avg temp for dates between start and end date. 
+    start_only = session.query(Measurement.date, func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+        filter(Measurement.date >= start).\
+        filter(Measurement.date <= end).\
+        group_by(Measurement.date).all()
+    # Convert List of Tuples Into Normal List
+    start_and_end_list = list(start_and_end)
+    # Return JSON List of Min Temp, Avg Temp and Max Temp for a Given Start Range
+    return jsonify(start_and_end_list)
 
 # the end.
 if __name__ == "__main__":
