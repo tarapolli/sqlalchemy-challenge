@@ -1,5 +1,5 @@
 
-SQLAlchemy Homework - Surfs Up!
+SQLAlchemy project - Surfs Up!
 
 About this project:  
 This project does a deep-dive into the Hawaiian climate as an integral part of vacation planning. I used Python and SQLAlchemy to do basic climate analysis and data exploration of my climate database, using SQLAlchemy ORM queries, Pandas, and Matplotlib. See below for the three components of this project.
